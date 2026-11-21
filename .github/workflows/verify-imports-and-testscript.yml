@@ -1,0 +1,50 @@
+name: Native go-internal PR tests
+on:
+  push:
+    branches: [verify-imports-and-testscript-platforms]
+permissions:
+  contents: read
+jobs:
+  native:
+    name: ${{ matrix.runner }} with Go ${{ matrix.go }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-latest, macos-latest]
+        go: ['1.25', '1.26']
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: cf5f008674e1934225fc19f2a2774542fb2fdff6
+          path: pr318
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: 7c5c000d7b8f992c35b8e35900a242153e861a0d
+          path: pr319
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+        id: setup-go
+        with:
+          go-version: ${{ matrix.go }}.x
+          cache: false
+      - name: Test Android import selection (PR 318)
+        run: python .github/diagnostics/native-tests.py 318 ${{ runner.os == 'Windows' && 'windows' || 'darwin' }} ${{ matrix.go }}
+      - name: Test exit status handling (PR 319)
+        if: ${{ !cancelled() && steps.setup-go.outcome == 'success' }}
+        run: python .github/diagnostics/native-tests.py 319 ${{ runner.os == 'Windows' && 'windows' || 'darwin' }} ${{ matrix.go }}
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: results-${{ matrix.runner }}-${{ matrix.go }}
+          path: receipts/*.json
+          if-no-files-found: error
